@@ -1,5 +1,6 @@
 const request = require('request')
 const async = require('async')
+const sleep = require('sleep');
 
 const baseUri = 'https://pemilu2019.kpu.go.id'
 const uriCapres = baseUri + '/static/json/ppwp.json'
@@ -128,6 +129,63 @@ class Scanner {
                     console.log('\t\tProvince ' + Province[code].parentName + ' status : ', Province[code].validation)
                 }
                 cb()
+            },
+
+            /** get kecamatan */
+            (cb) => {
+                console.log('\tprocessing sub-district ...')
+                async.forEachOf(Province, (item, provcode, cbb) => {
+                    async.forEachOf(Province[provcode].list, (_item, code, _cbb) => {
+                        if (District[code] === undefined) {
+                            District[code] = Object.assign({}, Basic)
+                            District[code].parent = code
+                            District[code].parentName = _item.nama
+                        }
+                        const numcode = Number(code)
+                        const numcode0 = numcode + 2
+                        const numcode1 = numcode + 1
+                        let addpath = Number(provcode) < 0 ? '/' + numcode0 + '/' + numcode1 : ''
+                        // sleep.sleep(1)
+                        this.doGet(uriKabKot + provcode + addpath + '/' + code + '.json', { code: code }, (opt, subdistrict) => {
+                            District[opt.code].list = subdistrict
+                            _cbb()
+                        })
+                    }, () => {
+                        cbb()
+                    })
+                }, () => {
+                    cb()
+                })
+            },
+            /** get stat kecamatan */
+            (cb) => {
+                async.forEachOf(Province, (item, provcode, cbb) => {
+                    async.forEachOf(Province[provcode].list, (_item, code, _cbb) => {
+                        const numcode = Number(code)
+                        const numcode0 = numcode + 2
+                        const numcode1 = numcode + 1
+                        let addpath = Number(provcode) < 0 ? '/' + numcode0 + '/' + numcode1 : ''
+                        // sleep.sleep(1)
+                        this.doGet(uriStatKabKot + provcode + addpath + code + '.json', { code: code }, (opt, statkabkot) => {
+                            Province[code].originalData = statkabkot
+                            for (const _code in Province[code].list) {
+                                if (typeof Province[code].list[_code] === 'string') {
+                                    Province[code].list[_code] = {
+                                        nama: Province[code].list[_code],
+                                        total: statkabkot.table[_code]
+                                    }
+                                } else {
+                                    Province[code].list[_code]['total'] = statkabkot.table[_code]
+                                }
+                            }
+                            _cbb()
+                        })
+                    }, () => {
+                        cbb()
+                    })
+                }, () => {
+                    cb()
+                })
             },
 
         ], () => {
