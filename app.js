@@ -83,6 +83,7 @@ class Scanner {
                         Province[code].parentName = item.nama
                     }
                     const vcode = code === '-99' ? 'ln' : code
+                    // sleep.sleep(3)
                     this.doGet(uriKabKot + vcode + '.json', { code: code }, (opt, kabkot) => {
                         Province[opt.code].list = kabkot
                         cbb()
@@ -124,7 +125,8 @@ class Scanner {
                     /** compare with national */
                     if (output.computed[JOKOWI] !== National.originalData.table[code][JOKOWI]
                         || output.computed[PRABOWO] !== National.originalData.table[code][PRABOWO]) {
-                        console.log('\t' + Province[code].parentName + ' invalid', output, National.originalData.table[code])
+                        console.log('\t' + Province[code].parentName + ' invalid, sum kabupaten ', output, ' data nasional ', National.originalData.table[code])
+                        Province[code].validation = false
                     }
                     console.log('\t\tProvince ' + Province[code].parentName + ' status : ', Province[code].validation)
                 }
@@ -145,8 +147,9 @@ class Scanner {
                         const numcode0 = numcode + 2
                         const numcode1 = numcode + 1
                         let addpath = Number(provcode) < 0 ? '/' + numcode0 + '/' + numcode1 : ''
-                        // sleep.sleep(1)
-                        this.doGet(uriKabKot + provcode + addpath + '/' + code + '.json', { code: code }, (opt, subdistrict) => {
+                        // sleep.sleep(3)
+                        this.doGet(uriKabKot + provcode + addpath + '/' + code + '.json', { code: code, provcode: provcode, addpath: addpath }, (opt, subdistrict) => {
+                            // console.log('subdistrict ', opt, subdistrict)
                             District[opt.code].list = subdistrict
                             _cbb()
                         })
@@ -165,18 +168,20 @@ class Scanner {
                         const numcode0 = numcode + 2
                         const numcode1 = numcode + 1
                         let addpath = Number(provcode) < 0 ? '/' + numcode0 + '/' + numcode1 : ''
-                        // sleep.sleep(1)
-                        this.doGet(uriStatKabKot + provcode + addpath + code + '.json', { code: code }, (opt, statkabkot) => {
-                            Province[code].originalData = statkabkot
-                            for (const _code in Province[code].list) {
-                                if (typeof Province[code].list[_code] === 'string') {
-                                    Province[code].list[_code] = {
-                                        nama: Province[code].list[_code],
-                                        total: statkabkot.table[_code]
+                        // sleep.sleep(3)
+                        this.doGet(uriStatKabKot + provcode + addpath + code + '.json', { code: code, provcode: provcode, addpath: addpath }, (opt, statkecamatan) => {
+                            // console.log('subdistrict stat ', opt, statkecamatan)
+                            District[opt.code].originalData = statkecamatan
+                            for (const _code in District[opt.code].list) {
+                                if (typeof District[opt.code].list[_code] === 'string') {
+                                    District[opt.code].list[_code] = {
+                                        nama: District[opt.code].list[_code],
+                                        total: statkecamatan.table[_code]
                                     }
                                 } else {
-                                    Province[code].list[_code]['total'] = statkabkot.table[_code]
+                                    District[opt.code].list[_code]['total'] = statkecamatan.table[_code]
                                 }
+                                // console.log(District[opt.code].list[_code])
                             }
                             _cbb()
                         })
@@ -186,6 +191,25 @@ class Scanner {
                 }, () => {
                     cb()
                 })
+            },
+            /** kecamatan validation */
+            (cb) => {
+                /** validate subdistrict */
+                for (const code in Province) {
+                    const output = this.validate(Province[code])
+                    if (Province[code].validation === false) {
+                        console.log('\tProvince ' + Province[code].parentName + ' status : ', Province[code].validation, output)
+                    }
+
+                    /** compare with national */
+                    if (output.computed[JOKOWI] !== National.originalData.table[code][JOKOWI]
+                        || output.computed[PRABOWO] !== National.originalData.table[code][PRABOWO]) {
+                        console.log('\t' + Province[code].parentName + ' invalid, sum kabupaten ', output, ' data nasional ', National.originalData.table[code])
+                        Province[code].validation = false
+                    }
+                    console.log('\t\tProvince ' + Province[code].parentName + ' status : ', Province[code].validation)
+                }
+                cb()
             },
 
         ], () => {
@@ -200,7 +224,14 @@ class Scanner {
 
     doGet(u, opts, callback) {
         request.get(u, { "rejectUnauthorized": false }, (err, res, body) => {
-            callback(opts, JSON.parse(body));
+            // console.log('\t\t\tget ', u)
+            try {
+                const _json = JSON.parse(body)
+                callback(opts, _json);
+            } catch (jsonErr) {
+                // console.log(body)
+                this.doGet(u, opts, callback)
+            }
         })
     }
 
