@@ -27,6 +27,10 @@ const Capres = {
 const National = Object.assign({}, Basic)
 const Province = {}
 const District = {}
+const Subdistrict = {}
+const Village = {}
+
+const Summary = []
 
 class Scanner {
 
@@ -69,7 +73,15 @@ class Scanner {
             /** provinsi validation */
             (cb) => {
                 this.validate(National)
-                console.log('\t\tNational status : ', National.validation)
+                if (National.validation === false) {
+                    Summary.push({
+                        level: 'Nasional',
+                        name: 'Indonesia',
+                        status: National.validation,
+                        message: 'Chart nasional tidak sesuai dengan angka di tabel'
+                    })
+                    console.log('\t\tNational status : ', National.validation)
+                }
                 cb()
             },
 
@@ -119,6 +131,12 @@ class Scanner {
                 for (const code in Province) {
                     const output = this.validate(Province[code])
                     if (Province[code].validation === false) {
+                        Summary.push({
+                            level: 'Province',
+                            name: Province[code].parentName,
+                            status: Province[code].validation,
+                            message: 'Chart provinsi tidak sesuai dengan angka di tabel'
+                        })
                         console.log('\tProvince ' + Province[code].parentName + ' status : ', Province[code].validation, output)
                     }
 
@@ -127,8 +145,14 @@ class Scanner {
                         || output.computed[PRABOWO] !== National.originalData.table[code][PRABOWO]) {
                         console.log('\t' + Province[code].parentName + ' invalid, sum kabupaten ', output, ' data nasional ', National.originalData.table[code])
                         Province[code].validation = false
+                        Summary.push({
+                            level: 'Province',
+                            name: Province[code].parentName,
+                            status: Province[code].validation,
+                            message: 'SUM data kabupaten tidak sesuai dengan data provinsi'
+                        })
                     }
-                    console.log('\t\tProvince ' + Province[code].parentName + ' status : ', Province[code].validation)
+
                 }
                 cb()
             },
@@ -140,7 +164,7 @@ class Scanner {
                     async.forEachOf(Province[provcode].list, (_item, code, _cbb) => {
                         if (District[code] === undefined) {
                             District[code] = Object.assign({}, Basic)
-                            District[code].parent = code
+                            District[code].parent = provcode
                             District[code].parentName = _item.nama
                         }
                         const numcode = Number(code)
@@ -162,30 +186,24 @@ class Scanner {
             },
             /** get stat kecamatan */
             (cb) => {
-                async.forEachOf(Province, (item, provcode, cbb) => {
-                    async.forEachOf(Province[provcode].list, (_item, code, _cbb) => {
-                        const numcode = Number(code)
-                        const numcode0 = numcode + 2
-                        const numcode1 = numcode + 1
-                        let addpath = Number(provcode) < 0 ? '/' + numcode0 + '/' + numcode1 : ''
-                        // sleep.sleep(3)
-                        this.doGet(uriStatKabKot + provcode + addpath + code + '.json', { code: code, provcode: provcode, addpath: addpath }, (opt, statkecamatan) => {
-                            // console.log('subdistrict stat ', opt, statkecamatan)
-                            District[opt.code].originalData = statkecamatan
-                            for (const _code in District[opt.code].list) {
-                                if (typeof District[opt.code].list[_code] === 'string') {
-                                    District[opt.code].list[_code] = {
-                                        nama: District[opt.code].list[_code],
-                                        total: statkecamatan.table[_code]
-                                    }
-                                } else {
-                                    District[opt.code].list[_code]['total'] = statkecamatan.table[_code]
+                async.forEachOf(District, (item, code, cbb) => {
+                    const numcode = Number(code)
+                    const numcode0 = numcode + 2
+                    const numcode1 = numcode + 1
+                    let addpath = Number(item.parent) < 0 ? '/' + numcode0 + '/' + numcode1 : ''
+                    this.doGet(uriStatKabKot + item.parent + addpath + code + '.json', { code: code, provcode: item.parent, addpath: addpath }, (opt, statkecamatan) => {
+                        // console.log('subdistrict stat ', opt, statkecamatan)
+                        District[opt.code].originalData = statkecamatan
+                        for (const _code in District[opt.code].list) {
+                            if (typeof District[opt.code].list[_code] === 'string') {
+                                District[opt.code].list[_code] = {
+                                    nama: District[opt.code].list[_code],
+                                    total: statkecamatan.table[_code]
                                 }
-                                // console.log(District[opt.code].list[_code])
+                            } else {
+                                District[opt.code].list[_code]['total'] = statkecamatan.table[_code]
                             }
-                            _cbb()
-                        })
-                    }, () => {
+                        }
                         cbb()
                     })
                 }, () => {
@@ -195,19 +213,31 @@ class Scanner {
             /** kecamatan validation */
             (cb) => {
                 /** validate subdistrict */
-                for (const code in Province) {
-                    const output = this.validate(Province[code])
-                    if (Province[code].validation === false) {
-                        console.log('\tProvince ' + Province[code].parentName + ' status : ', Province[code].validation, output)
+                for (const code in District) {
+                    const output = this.validate(District[code])
+                    if (District[code].validation === false) {
+                        console.log('\tDistrict ' + District[code].parentName + ' status : ', District[code].validation, output)
+                        Summary.push({
+                            level: 'District',
+                            name: District[code].parentName,
+                            status: District[code].validation,
+                            message: 'Chart kabupaten/kota tidak sesuai dengan angka di tabel'
+                        })
                     }
 
-                    /** compare with national */
-                    if (output.computed[JOKOWI] !== National.originalData.table[code][JOKOWI]
-                        || output.computed[PRABOWO] !== National.originalData.table[code][PRABOWO]) {
-                        console.log('\t' + Province[code].parentName + ' invalid, sum kabupaten ', output, ' data nasional ', National.originalData.table[code])
-                        Province[code].validation = false
+                    /** compare with province */
+                    if (output.computed[JOKOWI] !== Province[District[code].parent].originalData.table[code][JOKOWI]
+                        || output.computed[PRABOWO] !== Province[District[code].parent].originalData.table[code][PRABOWO]) {
+                        console.log('\t' + Province[District[code].parent].parentName + ' invalid, sum kecamatan ', output)
+                        District[code].validation = false
+                        Summary.push({
+                            level: 'District',
+                            name: District[code].parentName,
+                            status: District[code].validation,
+                            message: 'SUM data kecamatan tidak sesuai dengan data kabupaten'
+                        })
                     }
-                    console.log('\t\tProvince ' + Province[code].parentName + ' status : ', Province[code].validation)
+
                 }
                 cb()
             },
