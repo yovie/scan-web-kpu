@@ -242,6 +242,92 @@ class Scanner {
                 cb()
             },
 
+            /** get desa */
+            (cb) => {
+                console.log('\tprocessing villages ...')
+                async.forEachOf(District, (item, discode, cbb) => {
+                    async.forEachOf(District[discode].list, (_item, code, _cbb) => {
+                        if (Subdistrict[code] === undefined) {
+                            Subdistrict[code] = Object.assign({}, Basic)
+                            Subdistrict[code].parent = discode
+                            Subdistrict[code].parentName = _item.nama
+                        }
+                        const numcode = Number(code)
+                        const numcode0 = numcode + 2
+                        const numcode1 = numcode + 1
+                        let addpath = Number(discode) < 0 ? '/' + numcode0 + '/' + numcode1 : ''
+                        this.doGet(uriKabKot + discode + addpath + '/' + code + '.json', { code: code, discode: discode, addpath: addpath }, (opt, subvillage) => {
+                            Subdistrict[opt.code].list = subvillage
+                            _cbb()
+                        })
+                    }, () => {
+                        cbb()
+                    })
+                }, () => {
+                    cb()
+                })
+            },
+            /** get stat desa */
+            (cb) => {
+                async.forEachOf(Subdistrict, (item, code, cbb) => {
+                    const numcode = Number(code)
+                    const numcode0 = numcode + 2
+                    const numcode1 = numcode + 1
+                    let addpath = Number(item.parent) < 0 ? '/' + numcode0 + '/' + numcode1 : ''
+                    this.doGet(uriStatKabKot + item.parent + addpath + code + '.json', { code: code, discode: item.parent, addpath: addpath }, (opt, statvillage) => {
+                        Subdistrict[opt.code].originalData = statvillage
+                        for (const _code in Subdistrict[opt.code].list) {
+                            let total = {}
+                            if (statvillage.table === undefined && statvillage.suara_total !== undefined) {
+                                total = statvillage.chart
+                            }
+                            if (typeof Subdistrict[opt.code].list[_code] === 'string') {
+                                Subdistrict[opt.code].list[_code] = {
+                                    nama: Subdistrict[opt.code].list[_code],
+                                    total: total
+                                }
+                            } else {
+                                Subdistrict[opt.code].list[_code]['total'] = total
+                            }
+                        }
+                        cbb()
+                    })
+                }, () => {
+                    cb()
+                })
+            },
+            /** desa validation, (luar negeri = tps) */
+            (cb) => {
+                /** validate village */
+                for (const code in Subdistrict) {
+                    const output = this.validate(Subdistrict[code])
+                    if (Subdistrict[code].validation === false) {
+                        console.log('\tDistrict ' + Subdistrict[code].parentName + ' status : ', Subdistrict[code].validation, output)
+                        Summary.push({
+                            level: 'Subdistrict',
+                            name: Subdistrict[code].parentName,
+                            status: Subdistrict[code].validation,
+                            message: 'Chart kecamatan tidak sesuai dengan angka di tabel'
+                        })
+                    }
+
+                    /** compare with subdistrict */
+                    if (output.computed[JOKOWI] !== District[Subdistrict[code].parent].originalData.table[code][JOKOWI]
+                        || output.computed[PRABOWO] !== District[Subdistrict[code].parent].originalData.table[code][PRABOWO]) {
+                        console.log('\t' + District[Subdistrict[code].parent].parentName + ' invalid, sum kecamatan ', output)
+                        Subdistrict[code].validation = false
+                        Summary.push({
+                            level: 'Subdistrict',
+                            name: Subdistrict[code].parentName,
+                            status: Subdistrict[code].validation,
+                            message: 'SUM data desa tidak sesuai dengan data kecamatan'
+                        })
+                    }
+
+                }
+                cb()
+            },
+
         ], () => {
             console.log('done')
             console.timeEnd('scanning')
