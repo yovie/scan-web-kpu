@@ -1,6 +1,7 @@
 const request = require('request')
 const async = require('async')
 const fs = require("fs");
+const sleep = require('sleep');
 
 const baseUri = 'https://pemilu2019.kpu.go.id'
 const uriCapres = baseUri + '/static/json/ppwp.json'
@@ -51,7 +52,7 @@ class Scanner {
                         (cbb) => {
                             async.forEachOf(Area, (prov, num, cbbb) => {
                                 const vcode = prov.id === '-99' ? 'ln' : prov.id
-                                that.doGet(uriBaseArea + vcode + '.json', { code: prov.id }, (opt, kabkot) => {
+                                that.doGet(uriBaseArea + vcode + '.json', { level: 'kabupaten', code: prov.id }, (opt, kabkot) => {
                                     prov['children'] = Object.keys(kabkot).map(idKab => {
                                         if (typeof kabkot[idKab] === 'string') {
                                             kabkot[idKab] = {
@@ -78,7 +79,7 @@ class Scanner {
                                     const numcode0 = numcode + 2
                                     const numcode1 = numcode + 1
                                     let addpath = Number(prov.id) < 0 ? '/' + numcode0 + '/' + numcode1 : ''
-                                    this.doGet(uriBaseArea + prov.id + addpath + '/' + kab.id + '.json', { code: kab.id, provcode: prov.id, addpath: addpath }, (opt, kecamatan) => {
+                                    this.doGet(uriBaseArea + prov.id + addpath + '/' + kab.id + '.json', { level: 'kecamatan', code: kab.id, provcode: prov.id, addpath: addpath }, (opt, kecamatan) => {
                                         kab['children'] = Object.keys(kecamatan).map(idKec => {
                                             kecamatan[idKec]['id'] = idKec
                                             kecamatan[idKec]['level'] = 'kecamatan'
@@ -101,7 +102,7 @@ class Scanner {
                                         const numcode0 = numcode + 2
                                         const numcode1 = numcode + 1
                                         let addpath = Number(prov.id) < 0 ? '/' + numcode0 + '/' + numcode1 : ''
-                                        this.doGet(uriBaseArea + prov.id + addpath + '/' + kec.id + '.json', { code: kec.id, provcode: prov.id, addpath: addpath }, (opt, desa) => {
+                                        this.doGet(uriBaseArea + prov.id + addpath + '/' + kec.id + '.json', { level: 'desa', code: kec.id, provcode: prov.id, addpath: addpath }, (opt, desa) => {
                                             kec['children'] = Object.keys(desa).map(idDes => {
                                                 desa[idDes]['id'] = idDes
                                                 desa[idDes]['level'] = 'desa'
@@ -128,7 +129,7 @@ class Scanner {
                                             const numcode0 = numcode + 2
                                             const numcode1 = numcode + 1
                                             let addpath = Number(prov.id) < 0 ? '/' + numcode0 + '/' + numcode1 : ''
-                                            this.doGet(uriBaseArea + prov.id + addpath + '/' + desa.id + '.json', { code: desa.id, provcode: prov.id, addpath: addpath }, (opt, tps) => {
+                                            this.doGet(uriBaseArea + prov.id + addpath + '/' + desa.id + '.json', { level: 'tps', code: desa.id, provcode: prov.id, addpath: addpath }, (opt, tps) => {
                                                 desa['children'] = Object.keys(tps).map(idTps => {
                                                     tps[idTps]['id'] = idTps
                                                     tps[idTps]['level'] = 'tps'
@@ -160,6 +161,7 @@ class Scanner {
 
             (cb) => {
                 /** get data tps */
+                cb()
             }
         ], (result) => {
             console.timeEnd('scanning')
@@ -171,12 +173,14 @@ class Scanner {
 
     doGet(u, opts, callback) {
         request.get(u, { "rejectUnauthorized": false }, (err, res, body) => {
-            console.log('\t\t\tget ', u)
+            console.log('\t\t\tget ', u, opts.level)
             try {
                 const _json = JSON.parse(body)
                 callback(opts, _json);
             } catch (jsonErr) {
                 console.log(jsonErr)
+                console.log('waiting 120 seconds to retry')
+                sleep.sleep(120)
                 this.doGet(u, opts, callback)
             }
         })
